@@ -79,3 +79,97 @@ blood.covars <- as.data.frame(blood.covars)
 rownames(EpiGenes_expr) == rownames(blood.covars)
 
 #write.csv(blood.covars,"blood metadata and covars.csv")
+
+############################################################################
+#Cell composition correction
+library(limma)
+
+covars <- blood.covars[, -1]
+
+covars$sex <- as.factor(covars$sex)
+
+cell_cols <- c(
+  "T cells",
+  "CD8 T cells",
+  "Cytotoxic lymphocytes",
+  "B lineage",
+  "NK cells",
+  "Monocytic lineage",
+  "Myeloid dendritic cells",
+  "Neutrophils",
+  "Endothelial cells",
+  "Fibroblasts"
+)
+
+covars[cell_cols] <- lapply(covars[cell_cols], function(x) {
+  as.numeric(as.character(x))
+})
+
+design <- model.matrix(
+  ~ sex +
+    `T cells` +
+    `CD8 T cells` +
+    `Cytotoxic lymphocytes` +
+    `B lineage` +
+    `NK cells` +
+    `Monocytic lineage` +
+    `Myeloid dendritic cells` +
+    Neutrophils +
+    `Endothelial cells` +
+    Fibroblasts,
+  data = covars
+)
+
+head(design)
+
+EpiGenes_expr_corrected <- removeBatchEffect(t(EpiGenes_expr), 
+                                             covariates = design[,-1])
+
+log_cpm_values_corrected <- removeBatchEffect(log_cpm_values, 
+                                              covariates = design[,-1])
+
+#PCA analysis
+
+PC <- prcomp(t(EpiGenes_expr_corrected), scale = TRUE)
+#PC$rotation
+summary(PC)
+
+cor.test(PC$x[,1], age, method="spearman")
+cor.test(PC$x[,2], age, method="spearman") #captura señal temporal
+cor.test(PC$x[,3], age, method="spearman") #captura señal temporal
+cor.test(PC$x[,4], age, method="spearman")
+
+sort(PC$rotation[,2], decreasing=TRUE)[1:30]
+sort(PC$rotation[,2])[1:25]
+
+sort(PC$rotation[,3], decreasing=TRUE)[1:30]
+sort(PC$rotation[,3])[1:25]
+
+plot(age, PC$x[,2])
+smooth.spline(age, PC$x[,2])
+
+summary(lm(PC$x[,2] ~ age + sex, data=covars))
+
+plot(age, PC$x[,3])
+abline(lm(PC$x[,3] ~ age))
+
+summary(lm(PC$x[,3] ~ age + sex, data=covars))
+
+#para ver correlacion de genes individuales
+#cor.test(EpiGenes_expr_corrected["EZH2",], age, method="spearman")
+
+loadings <- PC$rotation[,2]
+
+#Seleccionar por percentil: top 10%:
+threshold <- quantile(abs(loadings), 0.9)
+selected <- loadings[abs(loadings) >= threshold]
+
+#analisis estadistico
+anova(lm(PC$x[,2] ~ age))
+
+#los que explican el 50% del peso en el PC
+contrib <- loadings^2
+ordered <- sort(contrib, decreasing=TRUE)
+cumvar <- cumsum(ordered) / sum(ordered)
+selected <- names(ordered[cumvar <= 0.5])
+loadings[selected]
