@@ -27,69 +27,55 @@ log_cpm_values <- cpm(dge,log = TRUE, prior.count = 1)
 # View first few rows
 head(log_cpm_values)
 
-ensembl <- substr(rownames(log_cpm_values),1,15)
-rownames(log_cpm_values) <- ensembl
+#write.csv(log_cpm_values,"GTEx blood dataset.csv")
+
+rownames(log_cpm_values) <- substr(rownames(log_cpm_values),1,15)
 
 # Access sample metadata
-gtex_metadata <- colData(gtex_data)
+blood_metadata <- colData(gtex_data)
 
-# Filter for whole blood samples
-blood_samples <- gtex_metadata[gtex_metadata$study == "BLOOD", ]
+table(blood_metadata$gtex.sex)
+table(blood_metadata$gtex.age)
 
-# Subset expression data for blood samples
-blood_expr <- log_cpm_values[, colnames(log_cpm_values) %in% rownames(blood_samples)]
-
-# View dimensions of filtered data
-dim(blood_expr)
-
-table(blood_samples$gtex.sex)
-table(blood_samples$gtex.age)
-
-write.csv(blood_expr,"GTEx blood dataset.csv")
-
-library(readxl)
-library(org.Hs.eg.db)
-
-EpiGenes <- read_xlsx("epigenetic code genes HG19 TFI.xlsx")
-
-EpiGenes$Symbol <- toupper(EpiGenes$Symbol)
-
-
-EpiGenes$ensemble <- mapIds(org.Hs.eg.db, keys = EpiGenes$Symbol, 
-                            keytype = "SYMBOL", column="ENSEMBL")
-
-EpiGenes.in.blood <- rownames(blood_expr[which(substr(rownames(blood_expr),1,15) %in% EpiGenes$ensemble),])
-
-EpiGenes_expr <- blood_expr[EpiGenes.in.blood,]
-
-EpiGenes_expr <- as.data.frame(EpiGenes_expr)
-
-EpiGenes_expr <- t(EpiGenes_expr)
-
-colnames(EpiGenes_expr) <- substr(colnames(EpiGenes_expr),1,15)
-
-colnames(EpiGenes_expr) <- mapIds(org.Hs.eg.db, keys = colnames(EpiGenes_expr), 
-                                  keytype = "ENSEMBL", column="SYMBOL")
-
-#EpiGenes_expr$Symbol <- mapIds(org.Hs.eg.db, keys = substr(rownames(EpiGenes_expr),1,15), 
-#                               keytype = "ENSEMBL", column="SYMBOL")
-
-#write.csv2(EpiGenes_expr, "Epigenetic genes blood expression.csv")
-
+############################################################################
 #calculo de poblaciones celulares con MCPcounter
 library(MCPcounter)
 
 CellEstimates = MCPcounter.estimate(log_cpm_values,
                                     featuresType="ENSEMBL_ID")
 
+CellEstimates <- t(CellEstimates)
 
-#matriz de datos para modelos
+#############################################################################
 
-blood.df <- cbind(sex = blood_samples$gtex.sex,
-                          age.decade = blood_samples$gtex.age,
-                          t(CellEstimates),
-                          EpiGenes_expr)
+#armado del dataset de genes epigeneticos en sangre
 
-samples.df <- as.data.frame(blood.df)
+library(readxl)
+library(org.Hs.eg.db)
 
-write.csv(samples.df,"data frame para tfi.csv")
+EpiGenes <- read_xlsx("epigenetic code genes HG19.xlsx")
+
+EpiGenes$ensemble <- mapIds(org.Hs.eg.db, keys = EpiGenes$Symbol, 
+                            keytype = "SYMBOL", column="ENSEMBL")
+
+EpiGenes_expr <- log_cpm_values[which(rownames(log_cpm_values) %in% EpiGenes$ensemble),]
+
+EpiGenes_expr <- as.data.frame(EpiGenes_expr)
+
+EpiGenes_expr <- t(EpiGenes_expr)
+
+colnames(EpiGenes_expr) <- mapIds(org.Hs.eg.db, keys = colnames(EpiGenes_expr), 
+                                  keytype = "ENSEMBL", column="SYMBOL")
+
+#write.csv2(EpiGenes_expr, "Epigenetic genes blood expression.csv")
+
+#matriz de covariables para modelos
+blood.covars <- cbind(age.decade = blood_metadata$gtex.age,
+                      sex = blood_metadata$gtex.sex,
+                      CellEstimates)
+
+blood.covars <- as.data.frame(blood.covars)
+
+rownames(EpiGenes_expr) == rownames(blood.covars)
+
+#write.csv(blood.covars,"blood metadata and covars.csv")
