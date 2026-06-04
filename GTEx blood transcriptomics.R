@@ -128,6 +128,27 @@ EpiGenes_expr_corrected <- removeBatchEffect(t(EpiGenes_expr),
 log_cpm_values_corrected <- removeBatchEffect(log_cpm_values, 
                                               covariates = design[,-1])
 
+rownames(log_cpm_values_corrected) <- mapIds(org.Hs.eg.db, keys = rownames(log_cpm_values_corrected), 
+                                             keytype = "ENSEMBL", column="SYMBOL")
+
+# eliminar rownames NA
+log_cpm_values_corrected <- log_cpm_values_corrected[
+  !is.na(rownames(log_cpm_values_corrected)),
+  ,
+  drop = FALSE
+]
+
+# verificar duplicados
+sum(duplicated(rownames(log_cpm_values_corrected)))
+
+# hacer nombres únicos
+rownames(log_cpm_values_corrected) <- make.unique(
+  rownames(log_cpm_values_corrected)
+)
+
+# verificar que ya no haya duplicados
+sum(duplicated(rownames(log_cpm_values_corrected)))
+
 #PCA analysis
 
 PC <- prcomp(t(EpiGenes_expr_corrected), scale = TRUE)
