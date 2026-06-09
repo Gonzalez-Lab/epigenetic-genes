@@ -23,7 +23,7 @@ y <- age
 
 X <- t(EpiGenes_expr_corrected)
 
-X <- t(log_cpm_values_corrected) #transcriptoma completo
+#X <- t(log_cpm_values_corrected) #transcriptoma completo
 
 # Verificación básica
 stopifnot(nrow(X) == length(y))
